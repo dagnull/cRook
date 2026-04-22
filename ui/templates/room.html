@@ -82,13 +82,7 @@
             <!-- Card count -->
             <td style="padding:0.4rem 0.5rem;color:#aaa" x-text="p.card_count + ' 🃏'"></td>
             <!-- Score -->
-            <td style="padding:0.4rem 0.5rem">
-              <span x-text="p.score + ' pts'"></span>
-              <template x-if="phase === 'playing' || phase === 'nesting'">
-                <span style="font-size:0.78rem;color:#aaa;margin-left:4px"
-                      x-text="'(+' + p.round_points + ' this round)'"></span>
-              </template>
-            </td>
+            <td style="padding:0.4rem 0.5rem" x-text="p.score + ' pts'"></td>
             <!-- Bid status (bidding phase only) -->
             <td x-show="phase === 'bidding'" style="padding:0.4rem 0.5rem;font-size:0.85rem">
               <span x-show="p.passed" style="color:#888">passed</span>
@@ -241,10 +235,15 @@
 
   <!-- ── EVENT LOG ─────────────────────────────────────────────────────────── -->
   <details style="margin-top:2rem">
-    <summary style="cursor:pointer;color:#555;font-size:0.8rem">Event log</summary>
-    <ul style="font-size:0.72rem;font-family:monospace;margin-top:0.4rem;max-height:200px;overflow-y:auto">
+    <summary style="cursor:pointer;color:#555;font-size:0.8rem">
+      Event log (<span x-text="events.length"></span>)
+    </summary>
+    <ul style="margin-top:0.4rem;max-height:260px;overflow-y:auto;padding:0;list-style:none">
       <template x-for="(e, i) in events" :key="i">
-        <li x-text="JSON.stringify(e)" style="border-bottom:1px solid #111;padding:2px 0"></li>
+        <li style="display:flex;gap:0.6rem;align-items:baseline;padding:4px 2px;border-bottom:1px solid #111;font-size:0.78rem">
+          <span style="color:#444;font-family:monospace;flex-shrink:0" x-text="e._ts"></span>
+          <span :style="'color:' + eventColor(e.kind)" x-text="formatEvent(e)"></span>
+        </li>
       </template>
     </ul>
   </details>

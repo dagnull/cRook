@@ -305,8 +305,49 @@ function gameRoom(roomID, playerID, playerName) {
     },
 
     log(msg) {
-      this.events.unshift(msg);
-      if (this.events.length > 30) this.events.pop();
+      if (msg.kind === 'state_sync') return;
+      // Skip card_dealt events for other players (their card list is empty).
+      if (msg.kind === 'card_dealt' && !(msg.payload?.cards?.length > 0)) return;
+      const ts = new Date().toLocaleTimeString('en', {
+        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+      this.events.unshift({ ...msg, _ts: ts });
+      if (this.events.length > 60) this.events.pop();
+    },
+
+    formatEvent(e) {
+      const p = e.payload || {};
+      const name = id => this.playerName(id) || id;
+      switch (e.kind) {
+        case 'player_joined':  return `${p.name} joined`;
+        case 'player_left':    return `${p.name} left`;
+        case 'game_started':   return 'Cards dealt — bidding begins';
+        case 'card_dealt':     return `Your hand: ${(p.cards || []).length} cards`;
+        case 'bid_placed':     return `${name(p.player_id)} bid ${p.amount}`;
+        case 'player_passed':  return `${name(p.player_id)} passed`;
+        case 'bidding_won':    return `${name(p.player_id)} won the bid at ${p.amount}`;
+        case 'trump_named':    return `Trump named: ${p.trump}`;
+        case 'nest_set':       return 'Nest set — play begins';
+        case 'card_played':    return `${name(p.player_id)} played ${this.cardLabel(p.card)}`;
+        case 'trick_won':      return `${name(p.player_id)} won the trick${p.points > 0 ? ` (+${p.points} pts)` : ''}`;
+        case 'round_scored':   return `Round over — bid ${p.bid_amount} ${p.bidder_met ? 'made ✓' : 'set ✗'}`;
+        case 'error':          return `Error: ${p.message || p}`;
+        default:               return e.kind;
+      }
+    },
+
+    eventColor(kind) {
+      switch (kind) {
+        case 'trick_won':
+        case 'player_joined': return '#4caf50';
+        case 'round_scored':
+        case 'bidding_won':
+        case 'trump_named':   return '#f0c040';
+        case 'player_left':
+        case 'error':         return '#e94560';
+        case 'player_passed': return '#666';
+        default:              return '#888';
+      }
     },
   };
 }
