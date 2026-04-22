@@ -78,11 +78,8 @@ func (Standard) ValidateAction(s game.GameState, a game.Action) error {
 		if s.Phase != game.PhasePlaying {
 			return errors.New("not in playing phase")
 		}
-		if s.TrickLeader != idx && len(s.CurrentTrick.Plays) != idx-s.TrickLeader {
-			// simple turn check: it's idx's turn when Plays count equals distance from leader
-			if !isPlayerTurn(s, idx) {
-				return errors.New("not your turn to play")
-			}
+		if !isPlayerTurn(s, idx) {
+			return errors.New("not your turn to play")
 		}
 		hand := s.Players[idx].Hand
 		if !holdsCard(hand, a.Card) {

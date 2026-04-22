@@ -52,10 +52,12 @@ func (h *Hub) Run(ctx context.Context) {
 			h.mu.Unlock()
 		case c := <-h.unregister:
 			h.mu.Lock()
-			if _, ok := h.clients[c.PlayerID]; ok {
+			// Only remove the map entry if this is still the current client for the
+			// player — a reconnect may have already replaced it with a new client.
+			if current, ok := h.clients[c.PlayerID]; ok && current == c {
 				delete(h.clients, c.PlayerID)
-				close(c.Send)
 			}
+			close(c.Send)
 			h.mu.Unlock()
 		case fm := <-h.broadcast:
 			h.mu.RLock()

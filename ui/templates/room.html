@@ -7,63 +7,170 @@
 
   <div style="display:flex;gap:1rem;align-items:baseline;margin-bottom:1rem">
     <h1>{{.Room.Name}}</h1>
-    <span x-show="!connected" style="color:#e94560">[disconnected]</span>
-    <span x-show="connected && phase==='waiting'" style="color:#aaa">[waiting for players]</span>
-    <span x-show="phase==='playing'" style="color:#4caf50">▶ game in progress</span>
+    <span x-show="!connected" style="color:#e94560">[disconnected — reconnecting…]</span>
   </div>
 
-  <!-- Players list -->
+  <!-- ── TOAST CONTAINER ──────────────────────────────────────────────────── -->
+  <div class="toast-container" aria-live="polite">
+    <template x-for="t in toasts" :key="t.id">
+      <div :class="'toast toast-' + t.type + (t.fading ? ' fading' : '')"
+           x-text="t.message"></div>
+    </template>
+  </div>
+
+  <!-- ── YOUR TURN BANNER ─────────────────────────────────────────────────── -->
+  <div x-show="isMyTurn() && phase !== 'waiting' && phase !== 'scoring'"
+       style="background:#1a5c2e;border:2px solid #4caf50;border-radius:6px;padding:0.6rem 1rem;margin-bottom:1rem;font-size:1.05rem;font-weight:600">
+    ▶ Your turn
+    <span x-show="phase === 'bidding'"> — bid or pass</span>
+    <span x-show="phase === 'playing'"> — play a card</span>
+    <span x-show="phase === 'nesting' && trump === null"> — name trump</span>
+    <span x-show="phase === 'nesting' && trump !== null"> — discard <span x-text="nestSize"></span> cards</span>
+  </div>
+  <div x-show="!isMyTurn() && phase !== 'waiting' && phase !== 'scoring' && currentTurnID()"
+       style="background:#16213e;border:1px solid #0f3460;border-radius:6px;padding:0.6rem 1rem;margin-bottom:1rem;color:#aaa">
+    Waiting for <strong x-text="playerName(currentTurnID())" style="color:#eee"></strong>
+    <span x-show="phase === 'bidding'"> to bid or pass</span>
+    <span x-show="phase === 'playing'"> to play</span>
+    <span x-show="phase === 'nesting' && trump === null"> to name trump</span>
+    <span x-show="phase === 'nesting' && trump !== null"> to discard</span>
+  </div>
+
+  <!-- ── PLAYERS / SEAT ORDER ─────────────────────────────────────────────── -->
   <section>
-    <h2>Players
-      <template x-if="phase==='waiting'">
-        <button @click="startGame()" style="margin-left:1rem;font-size:0.85rem">Start Game</button>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2 style="margin:0">Players</h2>
+      <template x-if="phase === 'waiting'">
+        <button @click="startGame()">Start Game</button>
       </template>
-    </h2>
-    <ul>
-      <template x-for="p in players" :key="p.id">
-        <li>
-          <span x-text="p.name"></span>
-          <span x-text="p.id === playerID ? ' (you)' : ''" style="color:#aaa"></span>
-          <span x-text="' — Team ' + (p.team + 1)" style="color:#aaa;font-size:0.85rem"></span>
-          <span x-text="' 🃏 ' + (p.card_count || 0)" style="color:#aaa;font-size:0.85rem"></span>
-          <span x-text="' pts: ' + (p.score || 0)" style="color:#aaa;font-size:0.85rem"></span>
-        </li>
-      </template>
-    </ul>
+    </div>
+
+    <!-- Seat-order table — shows turn indicator, team, card count, score -->
+    <table style="width:100%;border-collapse:collapse;margin-top:0.5rem">
+      <thead>
+        <tr style="color:#aaa;font-size:0.8rem;text-align:left">
+          <th style="padding:0.3rem 0.5rem">Turn</th>
+          <th style="padding:0.3rem 0.5rem">Player</th>
+          <th style="padding:0.3rem 0.5rem">Team</th>
+          <th style="padding:0.3rem 0.5rem">Cards</th>
+          <th style="padding:0.3rem 0.5rem">Score</th>
+          <th x-show="phase === 'bidding'" style="padding:0.3rem 0.5rem">Bid status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="(p, seatIdx) in players" :key="p.id">
+          <tr :style="p.id === currentTurnID()
+                        ? 'background:#1a3a1a;border-left:3px solid #4caf50'
+                        : 'border-left:3px solid transparent'"
+              style="border-bottom:1px solid #0f3460">
+            <!-- Turn arrow -->
+            <td style="padding:0.4rem 0.5rem;width:2rem;font-size:1.1rem">
+              <span x-show="p.id === currentTurnID()">▶</span>
+            </td>
+            <!-- Name + badges -->
+            <td style="padding:0.4rem 0.5rem">
+              <span x-text="p.name"></span>
+              <span x-show="p.id === playerID"
+                    style="font-size:0.75rem;background:#0f3460;border-radius:3px;padding:0 4px;margin-left:4px">you</span>
+              <span x-show="p.id === bidderID && phase !== 'waiting' && phase !== 'bidding'"
+                    style="font-size:0.75rem;background:#5c3a00;border-radius:3px;padding:0 4px;margin-left:4px">bidder</span>
+            </td>
+            <!-- Team -->
+            <td style="padding:0.4rem 0.5rem;color:#aaa">
+              <span x-text="'Team ' + (p.team + 1)"></span>
+            </td>
+            <!-- Card count -->
+            <td style="padding:0.4rem 0.5rem;color:#aaa" x-text="p.card_count + ' 🃏'"></td>
+            <!-- Score -->
+            <td style="padding:0.4rem 0.5rem">
+              <span x-text="p.score + ' pts'"></span>
+              <template x-if="phase === 'playing' || phase === 'nesting'">
+                <span style="font-size:0.78rem;color:#aaa;margin-left:4px"
+                      x-text="'(+' + p.round_points + ' this round)'"></span>
+              </template>
+            </td>
+            <!-- Bid status (bidding phase only) -->
+            <td x-show="phase === 'bidding'" style="padding:0.4rem 0.5rem;font-size:0.85rem">
+              <span x-show="p.passed" style="color:#888">passed</span>
+              <span x-show="!p.passed && p.id === bidderID && currentBid > 0"
+                    style="color:#f0c040" x-text="'bid ' + currentBid"></span>
+              <span x-show="!p.passed && !(p.id === bidderID && currentBid > 0)"
+                    style="color:#aaa" x-text="p.id === bidTurn ? 'deciding…' : ''"></span>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
   </section>
 
-  <!-- Game status bar -->
-  <section x-show="phase !== 'waiting'" style="background:#16213e;padding:0.75rem;border-radius:4px;margin-bottom:1rem">
-    <span x-show="trump !== null">
-      Trump: <strong x-text="trump"></strong> &nbsp;
-    </span>
+  <!-- ── GAME STATUS BAR ───────────────────────────────────────────────────── -->
+  <section x-show="phase !== 'waiting'"
+           style="background:#16213e;padding:0.6rem 1rem;border-radius:4px;margin:1rem 0;display:flex;gap:1.5rem;flex-wrap:wrap;font-size:0.9rem">
+    <span>Phase: <strong x-text="phase"></strong></span>
+    <span x-show="trump">Trump: <strong x-text="trump" style="text-transform:capitalize"></strong></span>
     <span x-show="currentBid > 0">
-      Current bid: <strong x-text="currentBid"></strong>
-      <span x-show="bidderID"> by <strong x-text="playerName(bidderID)"></strong></span>
+      Bid: <strong x-text="currentBid"></strong> by <strong x-text="playerName(bidderID)"></strong>
+    </span>
+    <span x-show="phase === 'playing'">
+      Trick leader: <strong x-text="playerName(trickLeaderID)"></strong>
     </span>
   </section>
 
-  <!-- Bidding UI -->
+  <!-- ── CURRENT TRICK (play order) ───────────────────────────────────────── -->
+  <section x-show="phase === 'playing'">
+    <h2>Current Trick</h2>
+    <!-- Show all seats in trick-play order: leader first, then clockwise -->
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
+      <template x-for="(p, i) in trickPlayOrder()" :key="p.id">
+        <div :style="p.id === currentTurnID()
+                       ? 'border:2px solid #4caf50;background:#1a3a1a'
+                       : 'border:2px solid #0f3460;background:#16213e'"
+             style="border-radius:6px;padding:0.6rem 0.9rem;text-align:center;min-width:90px">
+          <!-- Seat label: lead / 2nd / 3rd / 4th -->
+          <div style="font-size:0.7rem;color:#aaa;margin-bottom:0.25rem"
+               x-text="i === 0 ? 'leads' : (i+1) + ordinal(i+1)"></div>
+          <!-- Player name -->
+          <div style="font-size:0.85rem;font-weight:600"
+               x-text="p.name + (p.id === playerID ? ' (you)' : '')"></div>
+          <!-- Card played or waiting indicator -->
+          <div style="margin-top:0.4rem;font-size:1rem;min-height:1.5rem">
+            <template x-if="cardPlayedBy(p.id)">
+              <span x-text="cardLabel(cardPlayedBy(p.id))"></span>
+            </template>
+            <template x-if="!cardPlayedBy(p.id)">
+              <span :style="p.id === currentTurnID() ? 'color:#4caf50' : 'color:#555'">
+                <span x-show="p.id === currentTurnID()">playing…</span>
+                <span x-show="p.id !== currentTurnID()">—</span>
+              </span>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+  </section>
+
+  <!-- ── BIDDING UI ────────────────────────────────────────────────────────── -->
   <section x-show="phase === 'bidding'">
     <h2>Bidding</h2>
     <template x-if="isMyBidTurn()">
-      <div style="display:flex;gap:0.5rem;align-items:center">
-        <input type="number" x-model="bidAmount" :min="(currentBid||65)+5" max="120" step="5" style="width:80px">
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+        <input type="number" x-model="bidAmount" :min="(currentBid || 65) + 5" max="120" step="5"
+               style="width:80px">
         <button @click="placeBid()">Bid <span x-text="bidAmount"></span></button>
         <button @click="pass()" style="background:#555">Pass</button>
       </div>
     </template>
-    <template x-if="!isMyBidTurn()">
-      <p style="color:#aaa">Waiting for <strong x-text="playerName(bidTurn)"></strong> to bid…</p>
-    </template>
   </section>
 
-  <!-- Trump selection (bidder picks trump) -->
+  <!-- ── TRUMP SELECTION ──────────────────────────────────────────────────── -->
   <section x-show="phase === 'nesting' && isBidder() && trump === null">
     <h2>Name Trump</h2>
     <div style="display:flex;gap:0.5rem">
       <template x-for="suit in ['yellow','red','green','black']" :key="suit">
-        <button @click="nameTrump(suit)" x-text="suit"></button>
+        <button @click="nameTrump(suit)"
+                style="text-transform:capitalize;min-width:80px"
+                x-text="suit + ' ' + ({yellow:'🟡',red:'🔴',green:'🟢',black:'⚫'}[suit])">
+        </button>
       </template>
     </div>
   </section>
@@ -71,71 +178,73 @@
     <p style="color:#aaa"><strong x-text="playerName(bidderID)"></strong> is naming trump…</p>
   </section>
 
-  <!-- Nest discard (bidder picks up nest and discards; trump already named) -->
+  <!-- ── NEST DISCARD ──────────────────────────────────────────────────────── -->
   <section x-show="phase === 'nesting' && isBidder() && trump !== null">
     <h2>Discard <span x-text="nestSize"></span> cards to the nest</h2>
-    <p style="color:#aaa;font-size:0.85rem">Selected: <span x-text="selectedDiscards.length"></span> / <span x-text="nestSize"></span></p>
+    <p style="color:#aaa;font-size:0.85rem">
+      Selected: <strong x-text="selectedDiscards.length"></strong> / <span x-text="nestSize"></span>
+    </p>
     <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.75rem">
       <template x-for="(card, i) in yourHand" :key="i">
-        <button
-          @click="toggleDiscard(card)"
-          :style="isDiscardSelected(card) ? 'background:#0f3460;border:2px solid #e94560' : 'background:#16213e'"
-          x-text="cardLabel(card)"
-          style="padding:0.3rem 0.6rem;border-radius:4px;cursor:pointer">
+        <button @click="toggleDiscard(card)"
+                :style="isDiscardSelected(card)
+                          ? 'background:#0f3460;border:2px solid #e94560;color:#fff'
+                          : 'background:#16213e;border:2px solid #0f3460'"
+                style="padding:0.35rem 0.7rem;border-radius:4px;cursor:pointer"
+                x-text="cardLabel(card)">
         </button>
       </template>
     </div>
-    <button @click="setNest()" :disabled="selectedDiscards.length !== nestSize">Confirm Discards</button>
+    <button @click="setNest()" :disabled="selectedDiscards.length !== nestSize">
+      Confirm Discards
+    </button>
   </section>
 
-  <!-- Current trick -->
-  <section x-show="phase === 'playing'">
-    <h2>Current Trick</h2>
-    <div style="display:flex;gap:0.5rem;min-height:2.5rem">
-      <template x-for="play in (currentTrick.plays || [])" :key="play.player_id">
-        <div style="background:#16213e;padding:0.5rem 0.75rem;border-radius:4px;text-align:center">
-          <div style="font-size:0.75rem;color:#aaa" x-text="playerName(play.player_id)"></div>
-          <div x-text="cardLabel(play.card)"></div>
-        </div>
-      </template>
-      <span x-show="!currentTrick.plays || currentTrick.plays.length === 0" style="color:#aaa">No cards played yet.</span>
-    </div>
-  </section>
-
-  <!-- Player hand (hidden during discard so the discard section is the only hand UI) -->
+  <!-- ── PLAYER HAND ──────────────────────────────────────────────────────── -->
   <section x-show="yourHand.length > 0 && !(phase === 'nesting' && isBidder() && trump !== null)">
-    <h2>Your Hand</h2>
+    <h2>Your Hand
+      <span x-show="phase === 'playing' && !isMyPlayTurn()"
+            style="font-size:0.8rem;font-weight:400;color:#aaa"> — not your turn</span>
+    </h2>
     <div style="display:flex;flex-wrap:wrap;gap:0.4rem">
       <template x-for="(card, i) in yourHand" :key="i">
-        <button
-          @click="phase === 'playing' && playCard(card)"
-          :disabled="phase !== 'playing'"
-          x-text="cardLabel(card)"
-          style="padding:0.35rem 0.7rem;border-radius:4px">
+        <button @click="isMyPlayTurn() && playCard(card)"
+                :disabled="phase !== 'playing' || !isMyPlayTurn()"
+                :style="isMyPlayTurn()
+                          ? 'background:#1a3a1a;border:2px solid #4caf50;cursor:pointer'
+                          : 'background:#16213e;border:2px solid #0f3460;opacity:0.6;cursor:default'"
+                style="padding:0.4rem 0.75rem;border-radius:4px;font-size:0.95rem"
+                x-text="cardLabel(card)">
         </button>
       </template>
     </div>
   </section>
 
-  <!-- Scoring summary -->
+  <!-- ── SCORING ───────────────────────────────────────────────────────────── -->
   <section x-show="phase === 'scoring'">
     <h2>Round Over</h2>
-    <ul>
+    <table style="border-collapse:collapse">
+      <tr style="color:#aaa;font-size:0.85rem">
+        <th style="padding:0.3rem 1rem 0.3rem 0;text-align:left">Player</th>
+        <th style="padding:0.3rem 1rem;text-align:left">Team</th>
+        <th style="padding:0.3rem 0;text-align:right">Score</th>
+      </tr>
       <template x-for="p in players" :key="p.id">
-        <li>
-          <span x-text="p.name"></span>:
-          <strong x-text="p.score"></strong> pts
-        </li>
+        <tr style="border-top:1px solid #0f3460">
+          <td style="padding:0.35rem 1rem 0.35rem 0" x-text="p.name + (p.id === playerID ? ' (you)' : '')"></td>
+          <td style="padding:0.35rem 1rem;color:#aaa" x-text="'Team ' + (p.team + 1)"></td>
+          <td style="padding:0.35rem 0;text-align:right;font-weight:600" x-text="p.score + ' pts'"></td>
+        </tr>
       </template>
-    </ul>
+    </table>
   </section>
 
-  <!-- Event log -->
+  <!-- ── EVENT LOG ─────────────────────────────────────────────────────────── -->
   <details style="margin-top:2rem">
-    <summary style="cursor:pointer;color:#aaa;font-size:0.85rem">Event log</summary>
-    <ul style="font-size:0.75rem;font-family:monospace;margin-top:0.5rem">
+    <summary style="cursor:pointer;color:#555;font-size:0.8rem">Event log</summary>
+    <ul style="font-size:0.72rem;font-family:monospace;margin-top:0.4rem;max-height:200px;overflow-y:auto">
       <template x-for="(e, i) in events" :key="i">
-        <li x-text="JSON.stringify(e)"></li>
+        <li x-text="JSON.stringify(e)" style="border-bottom:1px solid #111;padding:2px 0"></li>
       </template>
     </ul>
   </details>

@@ -37,15 +37,15 @@ func parseSuit(s string) (game.Suit, error) {
 }
 
 func (c cardJSON) toCard() (game.Card, error) {
-	suit, err := parseSuit(c.Suit)
-	if err != nil {
-		return game.Card{}, err
-	}
 	if c.Value == 0 {
 		return game.RookCard(), nil
 	}
 	if c.Value < 1 || c.Value > 14 {
 		return game.Card{}, fmt.Errorf("invalid card value: %d", c.Value)
+	}
+	suit, err := parseSuit(c.Suit)
+	if err != nil {
+		return game.Card{}, err
 	}
 	return game.Card{Suit: suit, Value: c.Value}, nil
 }

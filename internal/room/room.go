@@ -28,11 +28,13 @@ type Player struct {
 
 // PlayerView is the per-player public view of a PlayerState (hand hidden).
 type PlayerView struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Team      int    `json:"team"`
-	CardCount int    `json:"card_count"`
-	Score     int    `json:"score"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Team        int    `json:"team"`
+	CardCount   int    `json:"card_count"`
+	Score       int    `json:"score"`
+	RoundPoints int    `json:"round_points"` // trick points accumulated this round
+	Passed      bool   `json:"passed"`
 }
 
 // StateSyncPayload is sent to a client on (re)connect.
@@ -213,29 +215,46 @@ func (r *Room) StateSyncFor(playerID string) StateSyncPayload {
 		bidTurnID = s.Players[s.BidTurn].ID
 	}
 
+	// Tally trick points accumulated so far this round, per team.
+	teamTrickPoints := make(map[int]int)
+	for _, trick := range s.CompletedTricks {
+		idx := s.PlayerIndex(trick.WonBy)
+		if idx >= 0 {
+			teamTrickPoints[s.Players[idx].Team] += trick.Points
+		}
+	}
+
 	for i, p := range s.Players {
 		views[i] = PlayerView{
-			ID:        p.ID,
-			Name:      p.Name,
-			Team:      p.Team,
-			CardCount: len(p.Hand),
-			Score:     p.TotalScore,
+			ID:          p.ID,
+			Name:        p.Name,
+			Team:        p.Team,
+			CardCount:   len(p.Hand),
+			Score:       p.TotalScore,
+			RoundPoints: teamTrickPoints[p.Team],
+			Passed:      p.HasPassed,
 		}
 		if p.ID == playerID {
 			yourHand = p.Hand
 		}
 	}
 
+	var trickLeaderID string
+	if s.Phase == game.PhasePlaying && s.TrickLeader >= 0 && s.TrickLeader < len(s.Players) {
+		trickLeaderID = s.Players[s.TrickLeader].ID
+	}
+
 	return StateSyncPayload{
-		Phase:        s.Phase.String(),
-		Players:      views,
-		YourHand:     yourHand,
-		Trump:        s.Trump,
-		CurrentBid:   s.CurrentBid,
-		BidderID:     s.CurrentBidder,
-		BidTurn:      bidTurnID,
-		CurrentTrick: s.CurrentTrick,
-		NestSize:     len(s.Nest),
+		Phase:         s.Phase.String(),
+		Players:       views,
+		YourHand:      yourHand,
+		Trump:         s.Trump,
+		CurrentBid:    s.CurrentBid,
+		BidderID:      s.CurrentBidder,
+		BidTurn:       bidTurnID,
+		TrickLeaderID: trickLeaderID,
+		CurrentTrick:  s.CurrentTrick,
+		NestSize:      len(s.Nest),
 	}
 }
 
