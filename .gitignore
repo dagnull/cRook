@@ -1,0 +1,21 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+cRook
+
+# Build output
+*.test
+*.out
+
+# Data
+*.db
+
+# IDE
+.idea/
+.vscode/
+
+# Environment
+.env

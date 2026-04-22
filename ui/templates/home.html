@@ -1,0 +1,30 @@
+{{template "base" .}}
+
+{{define "title"}}cRook — Lobby{{end}}
+
+{{define "content"}}
+<section x-data="lobby()">
+  <h1>Lobby</h1>
+
+  {{if .Session.Name}}
+  <form method="POST" action="/rooms">
+    <input name="name" placeholder="Room name (optional)">
+    <button type="submit">Create Room</button>
+  </form>
+  {{else}}
+  <p>Set your name above to create or join a room.</p>
+  {{end}}
+
+  <h2>Open Rooms</h2>
+  <ul id="room-list" hx-get="/" hx-trigger="every 5s" hx-select="#room-list" hx-swap="outerHTML">
+    {{range .Rooms}}
+    <li>
+      <a href="/rooms/{{.ID}}">{{.Name}}</a>
+      <span>({{.PlayerCount}}/4)</span>
+    </li>
+    {{else}}
+    <li>No open rooms yet.</li>
+    {{end}}
+  </ul>
+</section>
+{{end}}
